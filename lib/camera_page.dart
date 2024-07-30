@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:video_for_yolov7/video_page.dart';
 
 class CameraPage extends StatefulWidget {
-  const CameraPage({Key? key}) : super(key: key);
+  final bool isRecording;
+  final void Function() toggleRecording;
+  final double currentSpeed;
+
+  const CameraPage({
+    Key? key,
+    required this.isRecording,
+    required this.toggleRecording,
+    required this.currentSpeed,
+  }) : super(key: key);
 
   @override
   _CameraPageState createState() => _CameraPageState();
@@ -11,13 +20,12 @@ class CameraPage extends StatefulWidget {
 
 class _CameraPageState extends State<CameraPage> {
   bool _isLoading = true;
-  bool _isRecording = false;
   late CameraController _cameraController;
 
   @override
   void initState() {
-    _initCamera();
     super.initState();
+    _initCamera();
   }
 
   @override
@@ -26,18 +34,20 @@ class _CameraPageState extends State<CameraPage> {
     super.dispose();
   }
 
-  _initCamera() async {
+  Future<void> _initCamera() async {
     final cameras = await availableCameras();
-    final front = cameras.firstWhere((camera) => camera.lensDirection == CameraLensDirection.front);
-    _cameraController = CameraController(front, ResolutionPreset.max);
+    final frontCamera = cameras.firstWhere(
+          (camera) => camera.lensDirection == CameraLensDirection.front,
+    );
+    _cameraController = CameraController(frontCamera, ResolutionPreset.max);
     await _cameraController.initialize();
     setState(() => _isLoading = false);
   }
 
-  _recordVideo() async {
-    if (_isRecording) {
+  Future<void> _recordVideo() async {
+    if (widget.isRecording) {
       final file = await _cameraController.stopVideoRecording();
-      setState(() => _isRecording = false);
+      widget.toggleRecording();
       final route = MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => VideoPage(filePath: file.path),
@@ -46,7 +56,7 @@ class _CameraPageState extends State<CameraPage> {
     } else {
       await _cameraController.prepareForVideoRecording();
       await _cameraController.startVideoRecording();
-      setState(() => _isRecording = true);
+      widget.toggleRecording();
     }
   }
 
@@ -69,9 +79,9 @@ class _CameraPageState extends State<CameraPage> {
           ),
           // Record button with a circle and dot inside
           Positioned(
-            bottom: 25, // Adjust this value to position the button higher or lower
+            bottom: 25,
             child: GestureDetector(
-              onTap: () => _recordVideo(),
+              onTap: _recordVideo,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -81,28 +91,40 @@ class _CameraPageState extends State<CameraPage> {
                     height: 70,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3), // White border
-                      //color: Colors.parent, // Background color for the outer circle
+                      border: Border.all(color: Colors.white, width: 3),
                     ),
                   ),
                   // Red dot or stop icon inside
-                  _isRecording
+                  widget.isRecording
                       ? Icon(Icons.stop, color: Colors.red, size: 50)
                       : Container(
                     width: 45,
                     height: 45,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.red, // Inner circle color
+                      color: Colors.red,
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          // Speed overlay
+          if (widget.isRecording)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: Container(
+                padding: EdgeInsets.all(8.0),
+                color: Colors.black54,
+                child: Text(
+                  '${widget.currentSpeed.toStringAsFixed(2)} m/s',
+                  style: TextStyle(color: Colors.white, fontSize: 20),
+                ),
+              ),
+            ),
         ],
       );
-
     }
   }
 }
