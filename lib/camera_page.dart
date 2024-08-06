@@ -1,6 +1,8 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:video_for_yolov7/video_page.dart';
+import 'estimate_speed.dart';
+
 
 class CameraPage extends StatefulWidget {
   final bool isRecording;

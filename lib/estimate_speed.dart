@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,72 +11,122 @@ class SpeedPage extends StatefulWidget {
   const SpeedPage({Key? key, required this.onSpeedUpdate}) : super(key: key);
 
   @override
-  State<SpeedPage> createState() => _SpeedPageState();
+  State<SpeedPage> createState() => SpeedPageState();
 }
 
-class _SpeedPageState extends State<SpeedPage> {
+class SpeedPageState extends State<SpeedPage> {
   bool locationDisabled = false;
   double currentSpeed = 0.0;
   SpeedUnit speedUnit = SpeedUnit.KPH;
+  StreamSubscription<Position>? positionStream;
 
   @override
   void initState() {
     super.initState();
-    startMeasurement();
+    checkPermission();
   }
 
   void startMeasurement() {
-    checkPermission();
-
+    print("start measurement");
     var options = const LocationSettings(
         accuracy: LocationAccuracy.best, distanceFilter: 0);
-    Geolocator.getPositionStream(locationSettings: options).listen((position) {
+    positionStream = Geolocator.getPositionStream(locationSettings: options).listen((position) {
       setPosition(position);
     });
   }
 
+  void stopMeasurement() {
+    positionStream?.cancel();
+  }
+
   void setPosition(Position position) {
     setState(() {
-      currentSpeed = position.speed;
+      currentSpeed = position.speed * 3.6;
     });
     widget.onSpeedUpdate(currentSpeed);
   }
 
-  void checkPermission() async {
+  Future<void> checkPermission() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
+      print('location disabled');
       setState(() {
         locationDisabled = true;
+      });
+      return;
+    }
+
+    if (serviceEnabled) {
+      print('location enable');
+      setState(() {
+        locationDisabled = false;
       });
     }
 
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
+      print('location denied check');
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
+        print('location denied request');
         setState(() {
           locationDisabled = true;
         });
+        _showPermissionDeniedDialog(); // 提示用户权限被拒绝
+        return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      setState(() {
+        locationDisabled = true;
+      });
+      return;
     }
 
     setState(() {
       locationDisabled = false;
     });
   }
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Location Permission Denied"),
+        content: Text("Please grant location permissions to use this feature."),
+        actions: [
+          TextButton(
+            child: Text("OK"),
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    stopMeasurement();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return locationDisabled
         ? ElevatedButton(
-        onPressed: startMeasurement, child: const Text('Retry'))
-        : SizedBox.shrink(); // Empty widget when speed is being updated
+      onPressed: () async {
+        await checkPermission();
+        if (!locationDisabled) {
+          startMeasurement();
+        }
+      },
+      child: const Text('Retry'),
+    )
+        : Container(); // Display nothing or other content when permission is granted
   }
 }
