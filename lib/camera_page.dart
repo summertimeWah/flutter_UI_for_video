@@ -39,7 +39,7 @@ class _CameraPageState extends State<CameraPage> {
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     final frontCamera = cameras.firstWhere(
-          (camera) => camera.lensDirection == CameraLensDirection.front,
+          (camera) => camera.lensDirection == CameraLensDirection.back,
     );
     _cameraController = CameraController(frontCamera, ResolutionPreset.max);
     await _cameraController.initialize();
