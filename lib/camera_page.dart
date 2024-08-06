@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:video_for_yolov7/video_page.dart';
 import 'estimate_speed.dart';
 
@@ -7,7 +10,7 @@ import 'estimate_speed.dart';
 class CameraPage extends StatefulWidget {
   final bool isRecording;
   final void Function() toggleRecording;
-  final double currentSpeed;
+  final String currentSpeed;
 
   const CameraPage({
     Key? key,
@@ -24,32 +27,79 @@ class _CameraPageState extends State<CameraPage> {
   bool _isLoading = true;
   late CameraController _cameraController;
 
+  int _recordedSeconds = 0;
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
     _initCamera();
+    _recordedSeconds = 0;
   }
 
   @override
   void dispose() {
     _cameraController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
-    final frontCamera = cameras.firstWhere(
+    final backCamera = cameras.firstWhere(
           (camera) => camera.lensDirection == CameraLensDirection.back,
     );
-    _cameraController = CameraController(frontCamera, ResolutionPreset.max);
+    _cameraController = CameraController(backCamera, ResolutionPreset.max);
     await _cameraController.initialize();
     setState(() => _isLoading = false);
+
+    _checkAndRequestLocationPermission();
   }
+
+  Future<void> _checkAndRequestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+      // 已獲得權限，可以進行位置操作
+      print('Location permission granted');
+    } else {
+      // 權限被拒絕
+      _showPermissionDeniedDialog();
+      print('Location permission denied');
+    }
+    return;
+  }
+
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Location Permission Denied"),
+        content: Text("Please grant location permissions to use this feature."),
+        actions: [
+          TextButton(
+            child: Text("OK"),
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Future<void> _recordVideo() async {
     if (widget.isRecording) {
       final file = await _cameraController.stopVideoRecording();
       widget.toggleRecording();
+      _timer?.cancel();
       final route = MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => VideoPage(filePath: file.path),
@@ -59,8 +109,15 @@ class _CameraPageState extends State<CameraPage> {
       await _cameraController.prepareForVideoRecording();
       await _cameraController.startVideoRecording();
       widget.toggleRecording();
+      _recordedSeconds = 0;
+      _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+        setState(() {
+          _recordedSeconds++;
+        });
+      });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -119,9 +176,18 @@ class _CameraPageState extends State<CameraPage> {
               child: Container(
                 padding: EdgeInsets.all(8.0),
                 color: Colors.black54,
-                child: Text(
-                  '${widget.currentSpeed.toStringAsFixed(2)} m/s',
-                  style: TextStyle(color: Colors.white, fontSize: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${widget.currentSpeed}',
+                      style: TextStyle(color: Colors.white, fontSize: 20),
+                    ),
+                    Text(
+                      'Recording: $_recordedSeconds s',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -129,4 +195,5 @@ class _CameraPageState extends State<CameraPage> {
       );
     }
   }
+
 }

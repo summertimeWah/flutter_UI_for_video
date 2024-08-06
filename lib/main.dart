@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:video_for_yolov7/speed_unit.dart';
 import 'camera_page.dart';
 import 'estimate_speed.dart';
 
@@ -31,63 +32,19 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool isRecording = false;
-  double currentSpeed = 0.0;
+  String currentSpeed = "0.0 km/h";
   final GlobalKey<SpeedPageState> _speedPageKey = GlobalKey<SpeedPageState>();
+
+  SpeedUnit speedUnit = SpeedUnit.KPH;
 
   @override
   void initState() {
     super.initState();
-    // _checkAndRequestInitCamera();
-    // _checkAndRequestLocationPermission();
-  }
 
-  Future<void> _checkAndRequestLocationPermission() async {
-    LocationPermission permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      permission = await Geolocator.requestPermission();
-    }
-
-    if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-      // 已獲得權限，可以進行位置操作
-      print('Location permission granted');
-    } else {
-      // 權限被拒絕
-      _showPermissionDeniedDialog();
-      print('Location permission denied');
-    }
-  }
-
-  Future<void> _checkAndRequestInitCamera() async {
-    final cameras = await availableCameras();
-    final frontCamera = cameras.firstWhere(
-          (camera) => camera.lensDirection == CameraLensDirection.front,
-    );
-  }
-
-  void _showPermissionDeniedDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Location Permission Denied"),
-        content: Text("Please grant location permissions to use this feature."),
-        actions: [
-          TextButton(
-            child: Text("OK"),
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
   }
 
 
   void toggleRecording() {
-
-    _checkAndRequestLocationPermission();
     setState(() {
       isRecording = !isRecording;
     });
@@ -127,7 +84,7 @@ class _HomePageState extends State<HomePage> {
 
   void updateSpeed(double speed) {
     setState(() {
-      currentSpeed = speed;
+      currentSpeed = speedUnit.format(speed);  // 使用 SpeedUnit 格式化速度
     });
   }
 
@@ -139,7 +96,7 @@ class _HomePageState extends State<HomePage> {
           CameraPage(
             toggleRecording: toggleRecording,
             isRecording: isRecording,
-            currentSpeed: currentSpeed,
+              currentSpeed: currentSpeed,
           ),
           if (isRecording)
             SpeedPage(

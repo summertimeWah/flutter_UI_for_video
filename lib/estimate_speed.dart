@@ -20,6 +20,8 @@ class SpeedPageState extends State<SpeedPage> {
   SpeedUnit speedUnit = SpeedUnit.KPH;
   StreamSubscription<Position>? positionStream;
 
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
@@ -29,19 +31,26 @@ class SpeedPageState extends State<SpeedPage> {
   void startMeasurement() {
     print("start measurement");
     var options = const LocationSettings(
-        accuracy: LocationAccuracy.best, distanceFilter: 0);
-    positionStream = Geolocator.getPositionStream(locationSettings: options).listen((position) {
-      setPosition(position);
+        accuracy: LocationAccuracy.best, distanceFilter: 0,);
+    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        positionStream = Geolocator.getPositionStream(locationSettings: options).listen((position) {
+          setPosition(position);
+        });
+      });
     });
+
   }
 
   void stopMeasurement() {
+    _timer?.cancel();
     positionStream?.cancel();
   }
 
   void setPosition(Position position) {
     setState(() {
-      currentSpeed = position.speed * 3.6;
+      print('loc get');
+      currentSpeed = position.speed;
     });
     widget.onSpeedUpdate(currentSpeed);
   }
@@ -112,6 +121,7 @@ class SpeedPageState extends State<SpeedPage> {
   @override
   void dispose() {
     stopMeasurement();
+    _timer?.cancel();
     super.dispose();
   }
 
