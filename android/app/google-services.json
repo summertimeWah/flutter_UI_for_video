@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "712357685322",
+    "project_id": "flutter-for-yolov7",
+    "storage_bucket": "flutter-for-yolov7.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712357685322:android:21462632cbc4063dd65eb3",
+        "android_client_info": {
+          "package_name": "com.example.video_for_yolov"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCF7s8GASoAfnuX0sGbItWJ2TiQCBLsY_o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:712357685322:android:08601020c13662fbd65eb3",
+        "android_client_info": {
+          "package_name": "com.example.video_for_yolov7"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCF7s8GASoAfnuX0sGbItWJ2TiQCBLsY_o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,38 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "flutter-for-yolov7",
+          "appId": "1:712357685322:android:08601020c13662fbd65eb3",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "flutter-for-yolov7",
+          "configurations": {
+            "android": "1:712357685322:android:08601020c13662fbd65eb3",
+            "web": "1:712357685322:web:0cdf1bc1c7398cb1d65eb3",
+            "windows": "1:712357685322:web:1590bb40d2baba5cd65eb3"
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "storage": {
+      "host": "0.0.0.0",
+      "port": 9199
+    },
+    "ui": {
+      "host": "0.0.0.0",
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  }
+}
