@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:video_for_yolov7/video_page.dart';
+import 'package:video_for_yolov7/video_show/video_page.dart';
 import 'estimate_speed.dart';
+import 'firebase_storage_page.dart';
+import 'package:path/path.dart' show basename;
 
 
 class CameraPage extends StatefulWidget {
@@ -96,16 +102,43 @@ class _CameraPageState extends State<CameraPage> {
 
 
   Future<void> _recordVideo() async {
+    var currentUser = FirebaseAuth.instance.currentUser;
+
     if (widget.isRecording) {
+      // 停止錄影並取得影片檔案
       final file = await _cameraController.stopVideoRecording();
       widget.toggleRecording();
       _timer?.cancel();
-      final route = MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => VideoPage(filePath: file.path),
-      );
-      Navigator.push(context, route);
+
+      try {
+        // 讀取影片檔案為 Uint8List
+        Uint8List videoBytes = await File(file.path).readAsBytes();
+
+        // 獲取當前時間並格式化
+        String formattedTime = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+
+        var userid = currentUser!.uid;
+
+        // 處理檔案名稱，去掉 .temp 並加上錄製時間
+        String fileName = 'REC_$formattedTime.mp4';
+        String? userID = userid;
+        print("檔名:$fileName");
+
+        // 上傳影片到 Firebase Storage
+        await FirebaseStoragePage.uploadObject(userID, fileName, videoBytes);
+
+        // 上傳成功提示
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("影片已成功上傳至 Firebase Storage"))
+        );
+      } catch (e) {
+        print("上傳失敗: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("上傳失敗: $e"))
+        );
+      }
     } else {
+      // 開始錄影
       await _cameraController.prepareForVideoRecording();
       await _cameraController.startVideoRecording();
       widget.toggleRecording();
@@ -117,7 +150,6 @@ class _CameraPageState extends State<CameraPage> {
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

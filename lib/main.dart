@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:video_for_yolov7/signup/sign_up_page.dart';
 import 'package:video_for_yolov7/speed_unit.dart';
 import 'package:video_for_yolov7/toast_set/toast.dart';
+import 'package:video_for_yolov7/video_show/video_list_page.dart';
 import 'camera_page.dart';
 import 'estimate_speed.dart';
 import '/signup/login_page.dart';
@@ -29,8 +30,10 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
+
   @override
   Widget build(BuildContext context) {
+    var currentUser = FirebaseAuth.instance.currentUser;
     return MaterialApp(
       title: 'Video and Speed App',
       theme: ThemeData(
@@ -41,6 +44,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => LoginPage(),
         '/signUp': (context) => SignUpPage(),
         '/home': (context) => MyApp(),
+        '/viedoList':(context) => VideoListPage( userID: currentUser?.uid, userName: currentUser?.displayName,),
       },
     );
   }
@@ -66,33 +70,54 @@ class _HomePageState extends State<HomePage> {
     super.initState();
   }
 
+
   void toggleRecording() {
+    if (currentUser == null) {
+      // 如果未登錄，顯示提示框並返回
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Error"),
+          content: Text("You haven't logged in. Please log in first."),
+          actions: [
+            TextButton(
+              child: Text("OK"),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      );
+      return; // 終止函數，避免繼續執行錄製邏輯
+    }
+
+    // 只有在使用者已經登錄的情況下才會進行錄製操作
     setState(() {
       isRecording = !isRecording;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final speedPageState = _speedPageKey.currentState;
+
       if (isRecording) {
         if (speedPageState != null) {
           speedPageState.startMeasurement();
         } else {
           showDialog(
             context: context,
-            builder: (context) =>
-                AlertDialog(
-                  title: Text("Error"),
-                  content: Text(
-                      "SpeedPage is not ready. Please try again later."),
-                  actions: [
-                    TextButton(
-                      child: Text("OK"),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ],
+            builder: (context) => AlertDialog(
+              title: Text("Error"),
+              content: Text("SpeedPage is not ready. Please try again later."),
+              actions: [
+                TextButton(
+                  child: Text("OK"),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
                 ),
+              ],
+            ),
           );
         }
       } else {
@@ -149,7 +174,7 @@ class _HomePageState extends State<HomePage> {
                     title: Text("Home"),
                     trailing: Icon(Icons.new_releases),
                     onTap: () {
-                      Navigator.pop(context); // Close the drawer
+                      Navigator.pushNamed(context, "/viedoList"); // Close the drawer
                     },
                   ),
                   Divider(),
