@@ -393,7 +393,7 @@ packages:
     source: hosted
     version: "0.15.4"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: b9c29a161230ee03d3ccf545097fccd9b87a5264228c5d348202e0f0c28f9010
@@ -632,6 +632,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.2"
+  show_fps:
+    dependency: "direct main"
+    description:
+      name: show_fps
+      sha256: "398124dd74456ad92fbb791cd6dd1018b5ced5ac3b9d0b401ab8c0e035ac9920"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.6"
   sky_engine:
     dependency: transitive
     description: flutter

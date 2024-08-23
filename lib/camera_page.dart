@@ -8,6 +8,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:video_for_yolov7/video_show/video_page.dart';
+import 'api_service.dart';
 import 'estimate_speed.dart';
 import 'firebase_storage_page.dart';
 import 'package:path/path.dart' show basename;
@@ -35,6 +36,10 @@ class _CameraPageState extends State<CameraPage> {
 
   int _recordedSeconds = 0;
   Timer? _timer;
+
+  int _dangerLevel = 0; // Variable to store the danger level (1-4)
+  final ApiService _apiService = ApiService(); // ApiService instance to send frames
+
 
   @override
   void initState() {
@@ -100,6 +105,23 @@ class _CameraPageState extends State<CameraPage> {
     );
   }
 
+  Future<void> _captureAndSendFrame() async {
+    try {
+      print("this is dangerLevel");
+      final frame = await _cameraController.takePicture(); // Capture a frame
+      Uint8List frameData = await File(frame.path).readAsBytes(); // Read as bytes
+
+      // Send frame to server and get danger level
+      int dangerLevel = await _apiService.sendFrame(frameData);
+
+      setState(() {
+        _dangerLevel = dangerLevel; // Update UI with danger level
+      });
+    } catch (e) {
+      print("Error capturing frame: $e");
+    }
+  }
+
 
   Future<void> _recordVideo() async {
     var currentUser = FirebaseAuth.instance.currentUser;
@@ -148,6 +170,15 @@ class _CameraPageState extends State<CameraPage> {
           _recordedSeconds++;
         });
       });
+      // Timer for capturing frames at 30 fps (every 33ms)
+      Timer.periodic(Duration(milliseconds: 33), (timer) {
+        if (!widget.isRecording) {
+          timer.cancel(); // Stop frame capture if recording is stopped
+        } else {
+          print("this is dangerLevel");
+          _captureAndSendFrame(); // Capture and send a frame every 33ms (approx 30 fps)
+        }
+      });
     }
   }
 
@@ -161,13 +192,56 @@ class _CameraPageState extends State<CameraPage> {
         ),
       );
     } else {
+      // Determine border color and text based on danger level
+      Color? borderColor;
+      String? warningText;
+
+      if (widget.isRecording) {
+        switch (_dangerLevel) {
+          case 4:
+            borderColor = Colors.red;
+            warningText = "Caution!!";
+            break;
+          case 3:
+            borderColor = Colors.orange;
+            warningText = "Front";
+            break;
+          case 2:
+            borderColor = Colors.yellow;
+            warningText = "Others";
+            break;
+          case 1:
+          default:
+            borderColor = null;
+            warningText = null;
+            break;
+        }
+      }
       return Stack(
         alignment: Alignment.bottomCenter,
         children: [
           // Camera preview
           Positioned.fill(
+            child: Container(
+                decoration: BoxDecoration(
+                  border: borderColor != null ? Border.all(color: borderColor!, width: 5) : null, // Red border if danger level is 4
+                ),
             child: CameraPreview(_cameraController),
+            ),
           ),
+          // Warning text display based on danger level
+          if (warningText != null)
+            Positioned(
+              top: 25,
+              child: Container(
+                padding: EdgeInsets.all(8.0),
+                color: borderColor!.withOpacity(0.5),
+                child: Text(
+                  warningText!,
+                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           // Record button with a circle and dot inside
           Positioned(
             bottom: 25,

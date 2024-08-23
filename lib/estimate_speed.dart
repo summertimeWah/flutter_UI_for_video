@@ -20,7 +20,6 @@ class SpeedPageState extends State<SpeedPage> {
   SpeedUnit speedUnit = SpeedUnit.KPH;
   StreamSubscription<Position>? positionStream;
 
-  Timer? _timer;
 
   @override
   void initState() {
@@ -32,18 +31,13 @@ class SpeedPageState extends State<SpeedPage> {
     print("start measurement");
     var options = const LocationSettings(
         accuracy: LocationAccuracy.best, distanceFilter: 0,);
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
         positionStream = Geolocator.getPositionStream(locationSettings: options).listen((position) {
           setPosition(position);
-        });
-      });
     });
 
   }
 
   void stopMeasurement() {
-    _timer?.cancel();
     positionStream?.cancel();
   }
 
@@ -121,7 +115,6 @@ class SpeedPageState extends State<SpeedPage> {
   @override
   void dispose() {
     stopMeasurement();
-    _timer?.cancel();
     super.dispose();
   }
 
