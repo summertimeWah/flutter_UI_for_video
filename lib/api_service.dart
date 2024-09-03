@@ -21,12 +21,15 @@ class ApiService {
         try {
           // 假设服务器返回的数据是一个包含状态的 JSON 格式字符串
           var jsonResponse = jsonDecode(event);
-          if (jsonResponse.containsKey('random_number')) {
-            int randomNumber = jsonResponse['random_number'];
-            onDataReceived(randomNumber); // 调用回调函数来更新状态
+
+          if (jsonResponse.containsKey('danger')) {
+            // 处理 'danger' 字段并将其转换为整数
+            int dangerLevel = int.parse(jsonResponse['danger'].toString());
+            print('Received danger level: $dangerLevel');
+            // 你可以在这里调用一个函数来使用 dangerLevel 值
           } else if (jsonResponse.containsKey('status')) {
             // Assuming the server sends status codes
-            int statusCode = jsonResponse['status'];
+            String statusCode = jsonResponse['status'].toString();
             print('Received status: $statusCode');
           } else {
             print('Unexpected data format: $jsonResponse');
@@ -44,11 +47,16 @@ class ApiService {
     );
   }
 
-  void sendFrame(String base64Image) {
+
+  void sendFrame(String base64Image, int frameWidth, int frameHeight) {
     print("already tring");
     try {
       // Frame is already in Base64 string format, no need to encode again
-      Map<String, dynamic> message = {'frame': base64Image};
+      Map<String, dynamic> message = {
+        "frame": base64Image,
+        "width": frameWidth,
+        "height": frameHeight,
+      };
 
       // Send the message over WebSocket
       _socketChannel.sendMessage(jsonEncode(message));
@@ -61,7 +69,6 @@ class ApiService {
 
 
   void closeConnection() {
-    // 关闭 WebSocket 连接
     _socketChannel.close();
   }
 }
@@ -114,6 +121,7 @@ class SocketChannel {
       },
     );
   }
+
 
   void sendMessage(String message) => _sink.add(message);
 

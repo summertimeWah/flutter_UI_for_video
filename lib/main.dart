@@ -93,6 +93,7 @@ class _HomePageState extends State<HomePage> {
       );
       return; // 終止函數，避免繼續執行錄製邏輯
     }
+    _checkAndRequestLocationPermission();
 
     // 只有在使用者已經登錄的情況下才會進行錄製操作
     setState(() {
@@ -128,6 +129,45 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+
+
+  Future<void> _checkAndRequestLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+      // 已獲得權限，可以進行位置操作
+      print('Location permission granted');
+    } else {
+      // 權限被拒絕
+      _showPermissionDeniedDialog();
+      print('Location permission denied');
+    }
+    return;
+  }
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Location Permission Denied"),
+        content: Text("Please grant location permissions to use this feature."),
+        actions: [
+          TextButton(
+            child: Text("OK"),
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void updateSpeed(double speed) {
     setState(() {
       currentSpeed = speedUnit.format(speed); // 使用 SpeedUnit 格式化速度
@@ -159,66 +199,66 @@ class _HomePageState extends State<HomePage> {
           children: <Widget>[
             currentUser != null
                 ? Column(
-                children: [
-                  UserAccountsDrawerHeader(
-                    accountName: Text(currentUser!.displayName ?? 'No Name'),
-                    accountEmail: Text(currentUser!.email ?? 'No Email'),
-                    currentAccountPicture: CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: Text(
-                        currentUser!.displayName != null && currentUser!.displayName!.length > 4
-                            ? currentUser!.displayName!.substring(0, 4)
-                            : currentUser!.displayName ?? 'User',
-                      ),
+              children: [
+                UserAccountsDrawerHeader(
+                  accountName: Text(currentUser!.displayName ?? 'No Name'),
+                  accountEmail: Text(currentUser!.email ?? 'No Email'),
+                  currentAccountPicture: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text(
+                      currentUser!.displayName != null && currentUser!.displayName!.length > 4
+                          ? currentUser!.displayName!.substring(0, 4)
+                          : currentUser!.displayName ?? 'User',
                     ),
                   ),
-                  ListTile(
-                    title: Text("Home"),
-                    trailing: Icon(Icons.new_releases),
-                    onTap: () {
-                      Navigator.pushNamed(context, "/viedoList"); // Close the drawer
-                    },
-                  ),
-                  Divider(),
-                  ListTile(
-                    title: Text("log out"),
-                    trailing: Icon(Icons.logout),
-
-                    onTap: () {
-                      FirebaseAuth.instance.signOut();
-                      setState(() {
-                        currentUser = FirebaseAuth.instance.currentUser; // 重新取得 currentUser
-                      });
-                      currentUser = null;
-                      showToast(message: "User is successfully logout");
-                      Navigator.pushNamed(context, "/home");
-                    },
-                  ),
-                ],
-              )
-                  : Column(
-                  children: [
-                    const UserAccountsDrawerHeader(
-                      accountName: Text('Please login'),
-                      accountEmail: Text(''),
-                      currentAccountPicture: CircleAvatar(
-                        backgroundColor: Colors.white,
-                        child: Text("None"),
-                      ),
-                    ),
-                    ListTile(
-                      title: Text("Login"),
-                      trailing: Icon(Icons.person),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const LoginPage()));
-                      },
-                    ),
-                  ],
                 ),
+                ListTile(
+                  title: Text("Home"),
+                  trailing: Icon(Icons.new_releases),
+                  onTap: () {
+                    Navigator.pushNamed(context, "/viedoList"); // Close the drawer
+                  },
+                ),
+                Divider(),
+                ListTile(
+                  title: Text("log out"),
+                  trailing: Icon(Icons.logout),
+
+                  onTap: () {
+                    FirebaseAuth.instance.signOut();
+                    setState(() {
+                      currentUser = FirebaseAuth.instance.currentUser; // 重新取得 currentUser
+                    });
+                    currentUser = null;
+                    showToast(message: "User is successfully logout");
+                    Navigator.pushNamed(context, "/home");
+                  },
+                ),
+              ],
+            )
+                : Column(
+              children: [
+                const UserAccountsDrawerHeader(
+                  accountName: Text('Please login'),
+                  accountEmail: Text(''),
+                  currentAccountPicture: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: Text("None"),
+                  ),
+                ),
+                ListTile(
+                  title: Text("Login"),
+                  trailing: Icon(Icons.person),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const LoginPage()));
+                  },
+                ),
+              ],
+            ),
             Divider(),
             ListTile(
               title: Text("Close"),
