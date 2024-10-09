@@ -56,8 +56,8 @@ dependencies:
   firebase_app_check: ^0.2.2+7
   web_socket_channel: ^3.0.1
 
-  ffmpeg_kit_flutter: ^6.0.3
-  opencv_dart: ^1.2.3
+  supabase_flutter: ^2.8.0
+
 
 dev_dependencies:
   flutter_test:

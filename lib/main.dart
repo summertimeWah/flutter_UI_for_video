@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_for_yolov7/signup/sign_up_page.dart';
 import 'package:video_for_yolov7/speed_unit.dart';
 import 'package:video_for_yolov7/toast_set/toast.dart';
@@ -19,12 +20,10 @@ import 'package:show_fps/show_fps.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await FirebaseAppCheck.instance.activate(
-    //androidProvider: AndroidProvider.playIntegrity,
-    androidProvider: AndroidProvider.debug,
+  await Supabase.initialize(
+    url: 'https://oxskmydkkwzllyxnbcny.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94c2tteWRra3d6bGx5eG5iY255Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjc4NDIxMjMsImV4cCI6MjA0MzQxODEyM30.1yxXD6y6Vdfhj2mleREd9dpcI-XmMiP3S8Ng-XhQOvw',
+
   );
   runApp(MyApp());
 }
@@ -35,7 +34,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var currentUser = FirebaseAuth.instance.currentUser;
+    var currentUser = Supabase.instance.client.auth.currentSession?.user;  // 用 Supabase 驗證用戶
     return MaterialApp(
       title: 'Video and Speed App',
       theme: ThemeData(
@@ -46,7 +45,10 @@ class MyApp extends StatelessWidget {
         '/login': (context) => LoginPage(),
         '/signUp': (context) => SignUpPage(),
         '/home': (context) => MyApp(),
-        '/viedoList':(context) => VideoListPage( userID: currentUser?.uid, userName: currentUser?.displayName,),
+        '/viedoList': (context) => VideoListPage(
+          userID: currentUser?.id,  // 使用 Supabase User ID
+          userName: currentUser?.email,  // 使用 Supabase email 作為名稱
+        ),
       },
     );
   }
@@ -65,13 +67,13 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey<SpeedPageState> _speedPageKey = GlobalKey<SpeedPageState>();
   SpeedUnit speedUnit = SpeedUnit.KPH;
 
-  var currentUser = FirebaseAuth.instance.currentUser;
+  var currentUser = Supabase.instance.client.auth.currentSession?.user;  // 用 Supabase 來處理用戶信息
+  bool isGranted = false;
 
   @override
   void initState() {
     super.initState();
   }
-
 
   void toggleRecording() {
     if (currentUser == null) {
@@ -93,7 +95,11 @@ class _HomePageState extends State<HomePage> {
       );
       return; // 終止函數，避免繼續執行錄製邏輯
     }
+
     _checkAndRequestLocationPermission();
+    if(!isGranted){
+      return;
+    }
 
     // 只有在使用者已經登錄的情況下才會進行錄製操作
     setState(() {
@@ -142,6 +148,8 @@ class _HomePageState extends State<HomePage> {
     if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
       // 已獲得權限，可以進行位置操作
       print('Location permission granted');
+      isGranted = true;
+
     } else {
       // 權限被拒絕
       _showPermissionDeniedDialog();
@@ -201,14 +209,14 @@ class _HomePageState extends State<HomePage> {
                 ? Column(
               children: [
                 UserAccountsDrawerHeader(
-                  accountName: Text(currentUser!.displayName ?? 'No Name'),
-                  accountEmail: Text(currentUser!.email ?? 'No Email'),
+                  accountName: Text(currentUser?.email ?? 'No Name'),  // 用 Supabase email
+                  accountEmail: Text(currentUser?.email ?? 'No Email'),
                   currentAccountPicture: CircleAvatar(
                     backgroundColor: Colors.white,
                     child: Text(
-                      currentUser!.displayName != null && currentUser!.displayName!.length > 4
-                          ? currentUser!.displayName!.substring(0, 4)
-                          : currentUser!.displayName ?? 'User',
+                      currentUser?.email != null && currentUser!.email!.length > 4
+                          ? currentUser!.email!.substring(0, 4)
+                          : currentUser?.email ?? 'User',
                     ),
                   ),
                 ),
@@ -216,21 +224,19 @@ class _HomePageState extends State<HomePage> {
                   title: Text("Home"),
                   trailing: Icon(Icons.new_releases),
                   onTap: () {
-                    Navigator.pushNamed(context, "/viedoList"); // Close the drawer
+                    Navigator.pushNamed(context, "/viedoList");  // Close the drawer
                   },
                 ),
                 Divider(),
                 ListTile(
                   title: Text("log out"),
                   trailing: Icon(Icons.logout),
-
-                  onTap: () {
-                    FirebaseAuth.instance.signOut();
+                  onTap: () async {
+                    await Supabase.instance.client.auth.signOut(); // 不需要檢查回應物件，signOut 會直接執行
                     setState(() {
-                      currentUser = FirebaseAuth.instance.currentUser; // 重新取得 currentUser
+                      currentUser = Supabase.instance.client.auth.currentSession?.user;  // 更新 currentUser 為 null
                     });
-                    currentUser = null;
-                    showToast(message: "User is successfully logout");
+                    showToast(message: "User is successfully logged out");
                     Navigator.pushNamed(context, "/home");
                   },
                 ),
