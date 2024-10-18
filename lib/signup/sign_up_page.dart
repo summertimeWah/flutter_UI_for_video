@@ -1,12 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../firebase_auth/firebase_auth_services.dart';
-import 'login_page.dart';
 import 'package:video_for_yolov7/widgets/form_container_widget.dart';
 import 'package:video_for_yolov7/toast_set/toast.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'login_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -16,9 +14,8 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
-  final FirebaseAuthService _auth = FirebaseAuthService();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  TextEditingController _usernameController = TextEditingController();
   TextEditingController _emailController = TextEditingController();
   TextEditingController _passwordController = TextEditingController();
 
@@ -26,7 +23,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -50,35 +46,21 @@ class _SignUpPageState extends State<SignUpPage> {
                   "Sign Up",
                   style: TextStyle(fontSize: 27, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(
-                  height: 30,
-                ),
-                FormContainerWidget(
-                  controller: _usernameController,
-                  hintText: "Username",
-                  isPasswordField: false,
-                ),
-                SizedBox(
-                  height: 10,
-                ),
+                SizedBox(height: 30),
                 FormContainerWidget(
                   controller: _emailController,
                   hintText: "Email",
                   isPasswordField: false,
                 ),
-                SizedBox(
-                  height: 10,
-                ),
+                SizedBox(height: 10),
                 FormContainerWidget(
                   controller: _passwordController,
                   hintText: "Password",
                   isPasswordField: true,
                 ),
-                SizedBox(
-                  height: 30,
-                ),
+                SizedBox(height: 30),
                 GestureDetector(
-                  onTap:  (){
+                  onTap: () {
                     _signUp();
                   },
                   child: Container(
@@ -89,23 +71,24 @@ class _SignUpPageState extends State<SignUpPage> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
-                        child: isSigningUp ? CircularProgressIndicator(color: Colors.white,):Text(
+                        child: isSigningUp
+                            ? CircularProgressIndicator(
+                          color: Colors.white,
+                        )
+                            : Text(
                           "Sign Up",
                           style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold),
                         )),
                   ),
                 ),
-                SizedBox(
-                  height: 20,
-                ),
+                SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text("Already have an account?"),
-                    SizedBox(
-                      width: 5,
-                    ),
+                    SizedBox(width: 5),
                     GestureDetector(
                         onTap: () {
                           Navigator.pushAndRemoveUntil(
@@ -117,7 +100,8 @@ class _SignUpPageState extends State<SignUpPage> {
                         child: Text(
                           "Login",
                           style: TextStyle(
-                              color: Colors.blue, fontWeight: FontWeight.bold),
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold),
                         ))
                   ],
                 )
@@ -134,33 +118,30 @@ class _SignUpPageState extends State<SignUpPage> {
       isSigningUp = true;
     });
 
-    String username = _usernameController.text;
     String email = _emailController.text;
     String password = _passwordController.text;
 
-    User? user = await _auth.signUpWithEmailAndPassword(email, password);
+    try {
 
-    if (user != null) {
-      // 將 username 儲存到 Firestore
-      try {
-        // 更新 displayName
-        await user.updateDisplayName(username);
-        await user.reload(); // 重新載入使用者資料以更新本地 User 物件
+      // 使用 Supabase 進行註冊
+      final response = await _supabase.auth.signUp(email: email, password: password);
 
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'username': username,
-          'email': email,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-
+      if (response.user != null) {
         // 註冊成功，導航至主頁面
         Navigator.pushNamed(context, "/home");
-      } catch (e) {
+      } else {
         setState(() {
-          isSigningUp = false; // 停止旋轉
+          isSigningUp = false;
         });
-        showToast(message: "Failed to save user data: $e");
+        showToast(message: "Sign-up failed. No user created.");
       }
+    } catch (e) {
+      setState(() {
+        isSigningUp = false;
+      });
+      showToast(message: "Error: ${e.toString()}");
     }
   }
+
+
 }

@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_for_yolov7/video_show/video_page.dart';
 
 class VideoListPage extends StatefulWidget {
@@ -16,7 +17,7 @@ class VideoListPage extends StatefulWidget {
 }
 
 class _UserVideosPageState extends State<VideoListPage> {
-  List<Map<String, String>> videos = [];
+  List<Map<String, dynamic>> videos = [];
 
   @override
   void initState() {
@@ -25,23 +26,29 @@ class _UserVideosPageState extends State<VideoListPage> {
   }
 
   Future<void> _fetchUserVideos() async {
-    print("fetching...");
     try {
-      // 指定使用者的資料夾路徑
-      String folderPath = '/${widget.userID}/';
+      final SupabaseClient supabase = Supabase.instance.client;
 
-      // 從 Firebase Storage 中列出該資料夾下的所有檔案
-      ListResult result = await FirebaseStorage.instance.ref(folderPath).listAll();
+      // 從 Supabase 查詢影片資料
+      final files = await supabase.from('video').select();
+
+      if (files == null || files.isEmpty) {
+        print("No videos found for user.");
+        return;
+      }
+
+      //print(files); // 直接打印查詢結果
 
       // 取得每個影片的下載 URL 和名稱
-      List<Map<String, String>> videoList = await Future.wait(result.items.map((Reference ref) async {
-        String downloadURL = await ref.getDownloadURL();
+      List<Map<String, String>> videoList = files.map<Map<String, String>>((
+          file) {
         return {
-          'name': ref.name, // 檔案名稱
-          'url': downloadURL, // 檔案下載 URL
+          'name': file['videoName'],
+          'url': file['url'], // 使用資料庫中的 URL 欄位
         };
-      }).toList());
+      }).toList();
 
+      // 根據影片名稱排序
       videoList.sort((a, b) => b['name']!.compareTo(a['name']!));
 
       setState(() {
@@ -52,183 +59,102 @@ class _UserVideosPageState extends State<VideoListPage> {
     }
   }
 
-  Future<void> _deleteVideo(String videoName) async {
-    try {
-      String goalPath = '/${widget.userID}/$videoName';
-      await FirebaseStorage.instance.ref(goalPath).delete();
-      setState(() {
-        videos.removeWhere((video) => video['name'] == videoName);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$videoName 已刪除')),
-      );
-    } catch (e) {
-      print('Error occurred while deleting $videoName: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('刪除 $videoName 時發生錯誤')),
-      );
-    }
-  }
 
-  Future<void> downloadVideo(String videoName, String videoURL) async {
-    final ref = FirebaseStorage.instance.refFromURL(videoURL);
-
-    try {
-      Directory? appDocDir = await getExternalStorageDirectory();
-      File downloadToFile;
-
-      if (appDocDir != null) {
-        downloadToFile = File('${appDocDir.path}/$videoName');
-      } else {
-        print("didn't get external dictionary");
-        Directory appDocDir = await getApplicationDocumentsDirectory();
-        downloadToFile = File('${appDocDir.path}/$videoName');
-      }
-
-      // 创建下载任务
-      final downloadTask = ref.writeToFile(downloadToFile);
-
-      // 显示进度对话框
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return DownloadProgressDialog(downloadTask: downloadTask, videoName: videoName);
-        },
-      );
-    } catch (e) {
-      print('Error occurred while downloading $videoName: $e');
-    }
-  }
+  // Future<void> _deleteVideo(String videoName) async {
+  //   try {
+  //     final supabaseClient = Supabase.instance.client;
+  //     String filePath = '${widget.userID}/$videoName';
+  //
+  //     final result = await supabaseClient.storage.from('videos').remove([filePath]);
+  //
+  //     if (result.isEmpty) {
+  //       throw Exception('Failed to delete $videoName');
+  //     }
+  //
+  //     setState(() {
+  //       videos.removeWhere((video) => video['name'] == videoName);
+  //     });
+  //
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('$videoName 已刪除')),
+  //     );
+  //   } catch (e) {
+  //     print('Error occurred while deleting $videoName: $e');
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('刪除 $videoName 時發生錯誤')),
+  //     );
+  //   }
+  // }
+  //
+  //
+  // Future<void> downloadVideo(String videoName, String videoURL) async {
+  //   try {
+  //     Directory? appDocDir = await getExternalStorageDirectory();
+  //     File downloadToFile;
+  //
+  //     if (appDocDir != null) {
+  //       downloadToFile = File('${appDocDir.path}/$videoName');
+  //     } else {
+  //       print("didn't get external dictionary");
+  //       Directory appDocDir = await getApplicationDocumentsDirectory();
+  //       downloadToFile = File('${appDocDir.path}/$videoName');
+  //     }
+  //
+  //     final fileBytes = await Supabase.instance.client.storage.from('videos').download('${widget.userID}/$videoName');
+  //
+  //     await downloadToFile.writeAsBytes(fileBytes!);
+  //
+  //     // Show progress dialog
+  //     showDialog(
+  //       context: context,
+  //       barrierDismissible: false,
+  //       builder: (BuildContext context) {
+  //         return DownloadProgressDialog(videoName: videoName);
+  //       },
+  //     );
+  //   } catch (e) {
+  //     print('Error occurred while downloading $videoName: $e');
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("${widget.userName} 的影片"),
-      ),
+      appBar: AppBar(title: Text('User Videos')),
       body: videos.isEmpty
-          ? Center(child: Text('尚未有資料'))
+          ? Center(child: Text('No videos found'))
           : ListView.builder(
         itemCount: videos.length,
         itemBuilder: (context, index) {
-          String videoName = videos[index]['name']!;
-          String videoURL = videos[index]['url']!;
-
+          final video = videos[index];
           return ListTile(
-            title: Text(videoName),
-            trailing: PopupMenuButton<String>(
-              onSelected: (String value) {
-                if (value == '下載') {
-                  downloadVideo(videoName, videoURL);
-                } else if (value == '刪除') {
-                  _deleteVideo(videoName);
-                }
-              },
-              itemBuilder: (BuildContext context) {
-                return [
-                  PopupMenuItem<String>(
-                    value: '下載',
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('下載'),
-                        Icon(Icons.download),
-                      ],
-                    ),
+            title: Text(video['name'] ?? 'Unnamed Video'),
+            trailing: IconButton(
+              icon: Icon(Icons.play_arrow),
+              onPressed: () {
+                //_launchURL(video['url']!);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VideoPlayerPage(videoURL: video['url']!),
                   ),
-                  PopupMenuItem<String>(
-                    value: '刪除',
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('刪除', style: TextStyle(color: Colors.red)),
-                        Icon(Icons.delete, color: Colors.red),
-                      ],
-                    ),
-                  ),
-                ];
+                );
               },
             ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VideoPlayerPage(videoURL: videoURL),
-                ),
-              );
-            },
           );
         },
       ),
     );
   }
-}
 
-class DownloadProgressDialog extends StatefulWidget {
-  final DownloadTask downloadTask;
-  final String videoName;
+  void _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);  // 將字串轉換成 Uri
 
-  const DownloadProgressDialog({Key? key, required this.downloadTask, required this.videoName}) : super(key: key);
-
-  @override
-  _DownloadProgressDialogState createState() => _DownloadProgressDialogState();
-}
-
-class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
-  double _progress = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-
-    widget.downloadTask.snapshotEvents.listen((taskSnapshot) {
-      setState(() {
-        switch (taskSnapshot.state) {
-          case TaskState.running:
-            _progress = taskSnapshot.bytesTransferred / (taskSnapshot.totalBytes ?? 1);
-            break;
-          case TaskState.paused:
-            print("Download paused for ${widget.videoName}.");
-            break;
-          case TaskState.success:
-            print("Download complete for ${widget.videoName}.");
-            Navigator.of(context).pop(); // 关闭对话框
-            break;
-          case TaskState.canceled:
-            print("Download canceled for ${widget.videoName}.");
-            Navigator.of(context).pop(); // 关闭对话框
-            break;
-          case TaskState.error:
-            print("Download failed with error for ${widget.videoName}.");
-            Navigator.of(context).pop(); // 关闭对话框
-            break;
-        }
-      });
-    });
+    if (await canLaunchUrl(uri)) {  // 檢查是否可以打開此 URL
+      await launchUrl(uri);  // 打開該 URL
+    } else {
+      throw 'Could not launch $url';
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Downloading ${widget.videoName}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          LinearProgressIndicator(value: _progress),
-          SizedBox(height: 20),
-          Text('${(_progress * 100).toStringAsFixed(2)}% complete'),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            // Implement cancel logic here if needed
-            Navigator.of(context).pop();
-          },
-          child: Text('Cancel'),
-        ),
-      ],
-    );
-  }
 }

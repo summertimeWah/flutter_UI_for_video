@@ -26,6 +26,7 @@ class ApiService {
             // 处理 'danger' 字段并将其转换为整数
             int dangerLevel = int.parse(jsonResponse['danger'].toString());
             print('Received danger level: $dangerLevel');
+            onDataReceived(dangerLevel);
             // 你可以在这里调用一个函数来使用 dangerLevel 值
           } else if (jsonResponse.containsKey('status')) {
             // Assuming the server sends status codes

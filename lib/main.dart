@@ -1,9 +1,7 @@
-import 'package:camera/camera.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_for_yolov7/signup/sign_up_page.dart';
 import 'package:video_for_yolov7/speed_unit.dart';
@@ -12,11 +10,7 @@ import 'package:video_for_yolov7/video_show/video_list_page.dart';
 import 'camera_page.dart';
 import 'estimate_speed.dart';
 import '/signup/login_page.dart';
-import 'firebase_options.dart';
 
-import 'package:firebase_app_check/firebase_app_check.dart';
-
-import 'package:show_fps/show_fps.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -149,6 +143,7 @@ class _HomePageState extends State<HomePage> {
       // 已獲得權限，可以進行位置操作
       print('Location permission granted');
       isGranted = true;
+      return;
 
     } else {
       // 權限被拒絕
