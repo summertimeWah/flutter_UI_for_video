@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_for_yolov7/video_show/video_page.dart';
@@ -18,6 +19,7 @@ class VideoListPage extends StatefulWidget {
 
 class _UserVideosPageState extends State<VideoListPage> {
   List<Map<String, dynamic>> videos = [];
+  final SupabaseClient supabase = Supabase.instance.client;
 
   @override
   void initState() {
@@ -27,7 +29,6 @@ class _UserVideosPageState extends State<VideoListPage> {
 
   Future<void> _fetchUserVideos() async {
     try {
-      final SupabaseClient supabase = Supabase.instance.client;
 
       // 從 Supabase 查詢影片資料
       final files = await supabase.from('video').select();
@@ -60,62 +61,89 @@ class _UserVideosPageState extends State<VideoListPage> {
   }
 
 
-  // Future<void> _deleteVideo(String videoName) async {
-  //   try {
-  //     final supabaseClient = Supabase.instance.client;
-  //     String filePath = '${widget.userID}/$videoName';
-  //
-  //     final result = await supabaseClient.storage.from('videos').remove([filePath]);
-  //
-  //     if (result.isEmpty) {
-  //       throw Exception('Failed to delete $videoName');
-  //     }
-  //
-  //     setState(() {
-  //       videos.removeWhere((video) => video['name'] == videoName);
-  //     });
-  //
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text('$videoName 已刪除')),
-  //     );
-  //   } catch (e) {
-  //     print('Error occurred while deleting $videoName: $e');
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text('刪除 $videoName 時發生錯誤')),
-  //     );
-  //   }
-  // }
-  //
-  //
-  // Future<void> downloadVideo(String videoName, String videoURL) async {
-  //   try {
-  //     Directory? appDocDir = await getExternalStorageDirectory();
-  //     File downloadToFile;
-  //
-  //     if (appDocDir != null) {
-  //       downloadToFile = File('${appDocDir.path}/$videoName');
-  //     } else {
-  //       print("didn't get external dictionary");
-  //       Directory appDocDir = await getApplicationDocumentsDirectory();
-  //       downloadToFile = File('${appDocDir.path}/$videoName');
-  //     }
-  //
-  //     final fileBytes = await Supabase.instance.client.storage.from('videos').download('${widget.userID}/$videoName');
-  //
-  //     await downloadToFile.writeAsBytes(fileBytes!);
-  //
-  //     // Show progress dialog
-  //     showDialog(
-  //       context: context,
-  //       barrierDismissible: false,
-  //       builder: (BuildContext context) {
-  //         return DownloadProgressDialog(videoName: videoName);
-  //       },
-  //     );
-  //   } catch (e) {
-  //     print('Error occurred while downloading $videoName: $e');
-  //   }
-  // }
+  Future<void> _deleteVideo(String videoName) async {
+    try {
+      final supabaseClient = Supabase.instance.client;
+
+      // Construct file path based on the actual storage structure
+      String filePath = videoName;
+
+      print('Deleting file at path: $filePath');  // Debug log
+
+      final deleteResponse = await supabase.from('video').delete().eq('videoName', videoName);
+
+      // if (deleteResponse.error != null) {
+      //   print('Failed to delete video record from table: ${deleteResponse.error!.message}');
+      //   return;
+      // }
+
+      // Try deleting the file
+      final result = await supabaseClient.storage.from('video').remove([filePath]);
+
+      // if (result.isEmpty) {
+      //   throw Exception('Failed to delete $videoName');
+      // }
+
+      setState(() {
+        videos.removeWhere((video) => video['name'] == videoName);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$videoName 已刪除')),
+      );
+      Navigator.pop(context); // This will navigate back to the main page
+
+    } catch (e) {
+      print('Error occurred while deleting $videoName: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('刪除 $videoName 時發生錯誤')),
+      );
+    }
+  }
+
+  Future<void> downloadVideo(String videoName) async {
+    try {
+      Directory? appDocDir = await getExternalStorageDirectory();
+      File downloadToFile;
+
+      if (appDocDir != null) {
+        downloadToFile = File('${appDocDir.path}/$videoName');
+      } else {
+        print("Didn't get external directory");
+        Directory appDocDir = await getApplicationDocumentsDirectory();
+        downloadToFile = File('${appDocDir.path}/$videoName');
+      }
+
+      // Construct file path based on the actual storage structure
+      final filePath = videoName;
+      print('Downloading file from path: $filePath');  // Debug log
+
+      // Try downloading the file
+      final fileBytes = await Supabase.instance.client.storage
+          .from('video')
+          .download(filePath);
+
+      if (fileBytes != null) {
+        await downloadToFile.writeAsBytes(fileBytes);
+
+        // Share the video file
+        final result = await Share.shareXFiles(
+          [XFile(downloadToFile.path)],
+          text: 'Check this video out!',
+        );
+
+        if (result.status == ShareResultStatus.success) {
+          print('Thank you for sharing the video!');
+        }
+      } else {
+        print("Failed to download video");
+      }
+    } catch (e) {
+      print('Error occurred while downloading $videoName: $e');
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -129,17 +157,46 @@ class _UserVideosPageState extends State<VideoListPage> {
           final video = videos[index];
           return ListTile(
             title: Text(video['name'] ?? 'Unnamed Video'),
-            trailing: IconButton(
-              icon: Icon(Icons.play_arrow),
-              onPressed: () {
-                //_launchURL(video['url']!);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => VideoPlayerPage(videoURL: video['url']!),
-                  ),
-                );
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'play') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => VideoPlayerPage(videoURL: video['url']!),
+                    ),
+                  );
+                } else if (value == 'share') {
+                  downloadVideo(video['name']);
+                }
+                else{
+                  _deleteVideo(video['name']);
+                }
               },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'play',
+                  child: ListTile(
+                    leading: Icon(Icons.play_arrow),
+                    title: Text('播放'),
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'share',
+                  child: ListTile(
+                    leading: Icon(Icons.share),
+                    title: Text('分享'),
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete,color: Colors.red),
+                    title: Text('刪除'),
+                    textColor: Colors.red,
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -147,14 +204,5 @@ class _UserVideosPageState extends State<VideoListPage> {
     );
   }
 
-  void _launchURL(String url) async {
-    final Uri uri = Uri.parse(url);  // 將字串轉換成 Uri
-
-    if (await canLaunchUrl(uri)) {  // 檢查是否可以打開此 URL
-      await launchUrl(uri);  // 打開該 URL
-    } else {
-      throw 'Could not launch $url';
-    }
-  }
 
 }
