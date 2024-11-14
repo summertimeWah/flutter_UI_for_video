@@ -61,6 +61,7 @@ dependencies:
   share_plus: ^10.0.0
 
   opencv_dart: ^1.2.5
+  flutter_webrtc: ^0.10.8
 
 
 dev_dependencies:

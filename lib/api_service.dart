@@ -1,133 +1,90 @@
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:rxdart/rxdart.dart';
-import 'package:web_socket_channel/io.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _webSocketUrl = 'ws://10.0.2.2:8000/ws'; // 更新为 FastAPI 的 WebSocket 端点
+  final Map<String, dynamic> _iceServers = {
+    'iceServers': [
+      {'urls': 'stun:stun.l.google.com:19302'},  // STUN server
+    ]
+  };
 
-  late SocketChannel _socketChannel;
+  RTCPeerConnection? _peerConnection;
+  MediaStream? _localStream;
 
-  ApiService() {
-    // 初始化 WebSocket 连接
-    _socketChannel = SocketChannel(() => IOWebSocketChannel.connect(_webSocketUrl));
-  }
-  void initializeConnection(Function(int) onDataReceived) async {
-    // 监听 WebSocket 数据流
-    _socketChannel.stream.listen(
-          (event) {
-        print('Received event: $event');
-        try {
-          // 假设服务器返回的数据是一个包含状态的 JSON 格式字符串
-          var jsonResponse = jsonDecode(event);
-
-          if (jsonResponse.containsKey('danger')) {
-            // 处理 'danger' 字段并将其转换为整数
-            int dangerLevel = int.parse(jsonResponse['danger'].toString());
-            print('Received danger level: $dangerLevel');
-            onDataReceived(dangerLevel);
-            // 你可以在这里调用一个函数来使用 dangerLevel 值
-          } else if (jsonResponse.containsKey('status')) {
-            // Assuming the server sends status codes
-            String statusCode = jsonResponse['status'].toString();
-            print('Received status: $statusCode');
-          } else {
-            print('Unexpected data format: $jsonResponse');
-          }
-        } catch (e) {
-          print('Error parsing event data: $e');
-        }
-      },
-      onError: (error) {
-        print('Error: $error');
-      },
-      onDone: () {
-        print('Connection closed');
-      },
-    );
-  }
-
-
-  void sendFrame(String base64Image, int frameWidth, int frameHeight) {
-    print("already tring");
+  Future<void> initializeConnection() async {
     try {
-      // Frame is already in Base64 string format, no need to encode again
-      Map<String, dynamic> message = {
-        "frame": base64Image,
-        "width": frameWidth,
-        "height": frameHeight,
+      _peerConnection = await createPeerConnection(_iceServers);
+
+      if (_peerConnection == null) {
+        print("Failed to create peer connection.");
+      } else {
+        print("Peer connection created successfully.");
+      }
+
+      _peerConnection!.onConnectionState = (state) {
+        print('Connection state: $state');
+        if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+          print('Connection failed.');
+        }
+      };
+      print('Connection state: $_peerConnection!.onConnectionState');
+
+      final mediaConstraints = {
+        'audio': false,
+        'video': {
+          'facingMode': 'environment',
+          'width': {'ideal': 720},
+          'height': {'ideal': 1280},
+        },
       };
 
-      // Send the message over WebSocket
-      _socketChannel.sendMessage(jsonEncode(message));
-      print('Frame sent successfully');
-    } catch (e) {
-      print('Error sending frame: $e');
-    }
-  }
+      print("Attempting to get user media...");
+      _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      print("Media stream obtained successfully.");
 
-
-
-  void closeConnection() {
-    _socketChannel.close();
-  }
-}
-
-class SocketChannel {
-  SocketChannel(this._getIOWebSocketChannel) {
-    _startConnection();
-  }
-
-  final IOWebSocketChannel Function() _getIOWebSocketChannel;
-  late IOWebSocketChannel _ioWebSocketChannel;
-  WebSocketSink get _sink => _ioWebSocketChannel.sink;
-  late Stream<dynamic> _innerStream;
-
-  final _outerStreamSubject = BehaviorSubject<dynamic>();
-  Stream<dynamic> get stream => _outerStreamSubject.stream;
-
-  bool _isFirstRestart = false;
-  bool _isFollowingRestart = false;
-  bool _isManuallyClosed = false;
-
-  void _handleLostConnection() {
-    if (_isFirstRestart && !_isFollowingRestart) {
-      Future.delayed(const Duration(seconds: 3), () {
-        _isFollowingRestart = false;
-        _startConnection();
+      _localStream!.getTracks().forEach((track) {
+        _peerConnection!.addTrack(track, _localStream!);
       });
-      _isFollowingRestart = true;
-    } else {
-      _isFirstRestart = true;
-      _startConnection();
+
+      _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) async {
+        if (candidate != null) {
+          print('Received ICE candidate: ${candidate.toMap()}');
+          await http.post(
+            Uri.parse('http://10.0.2.2:8080/candidate'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'candidate': candidate.toMap(),
+            }),
+          );
+        }
+      };
+
+      await _exchangeSDP();
+    } catch (e) {
+      print("Error during connection initialization: $e");
     }
   }
 
-  void _startConnection() {
-    _ioWebSocketChannel = _getIOWebSocketChannel();
-    _innerStream = _ioWebSocketChannel.stream;
-    _innerStream.listen(
-          (event) {
-        _isFirstRestart = false;
-        _outerStreamSubject.add(event);
-      },
-      onError: (error) {
-        _handleLostConnection();
-      },
-      onDone: () {
-        if (!_isManuallyClosed) {
-          _handleLostConnection();
-        }
-      },
+  Future<void> _exchangeSDP() async {
+    RTCSessionDescription offer = await _peerConnection!.createOffer();
+    await _peerConnection!.setLocalDescription(offer);
+
+    final response = await http.post(
+      Uri.parse('http://10.0.2.2:8080/sdp'), // Adjust this to your server URL
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'sdp': offer.sdp, 'type': offer.type}),
+    );
+
+    final answer = jsonDecode(response.body);
+    await _peerConnection!.setRemoteDescription(
+      RTCSessionDescription(answer['sdp'], answer['type']),
     );
   }
 
-
-  void sendMessage(String message) => _sink.add(message);
-
-  void close() {
-    _isManuallyClosed = true;
-    _sink.close();
+  void closeConnection() {
+    _localStream?.dispose();
+    _peerConnection?.close();
+    _peerConnection = null;
   }
 }
