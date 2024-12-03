@@ -30,6 +30,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     var currentUser = Supabase.instance.client.auth.currentSession?.user;  // 用 Supabase 驗證用戶
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Video and Speed App',
       theme: ThemeData(
         primarySwatch: Colors.blue,

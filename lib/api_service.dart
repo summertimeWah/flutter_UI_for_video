@@ -5,7 +5,8 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ApiService {
-  static const String _webSocketUrl = 'ws://10.0.2.2:8000/ws'; // 更新为 FastAPI 的 WebSocket 端点
+  static const String _webSocketUrl = 'wss://6664-2402-7500-a43-845a-6809-9454-84a4-1d79.ngrok-free.app/ws'; // 更新为 FastAPI 的 WebSocket 端点
+
 
   late SocketChannel _socketChannel;
 
@@ -13,7 +14,7 @@ class ApiService {
     // 初始化 WebSocket 连接
     _socketChannel = SocketChannel(() => IOWebSocketChannel.connect(_webSocketUrl));
   }
-  void initializeConnection(Function(int) onDataReceived) async {
+  void initializeConnection(Function(double) onDataReceived) async {
     // 监听 WebSocket 数据流
     _socketChannel.stream.listen(
           (event) {
@@ -22,11 +23,11 @@ class ApiService {
           // 假设服务器返回的数据是一个包含状态的 JSON 格式字符串
           var jsonResponse = jsonDecode(event);
 
-          if (jsonResponse.containsKey('danger')) {
+          if (jsonResponse.containsKey('distance')) {
             // 处理 'danger' 字段并将其转换为整数
-            int dangerLevel = int.parse(jsonResponse['danger'].toString());
-            print('Received danger level: $dangerLevel');
-            onDataReceived(dangerLevel);
+            double distance = double.parse(jsonResponse['distance'].toString());
+            print('Received danger level: $distance');
+            onDataReceived(distance);
             // 你可以在这里调用一个函数来使用 dangerLevel 值
           } else if (jsonResponse.containsKey('status')) {
             // Assuming the server sends status codes
@@ -54,6 +55,7 @@ class ApiService {
     try {
       // Frame is already in Base64 string format, no need to encode again
       Map<String, dynamic> message = {
+        "type": "frame",
         "frame": base64Image,
         "width": frameWidth,
         "height": frameHeight,
@@ -66,6 +68,21 @@ class ApiService {
       print('Error sending frame: $e');
     }
   }
+
+  void sendRecordingStatus(bool isRecording) {
+    try {
+      Map<String, dynamic> message = {
+        "type": "recording_status",
+        "isRecording": isRecording,
+      };
+
+      _socketChannel.sendMessage(jsonEncode(message));
+      print('Recording status sent: $isRecording');
+    } catch (e) {
+      print('Error sending recording status: $e');
+    }
+  }
+
 
 
 

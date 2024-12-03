@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 
 class CameraPage extends StatefulWidget {
@@ -27,22 +28,33 @@ class _CameraPageState extends State<CameraPage> {
   Timer? _recordingTimer;
   Timer? _frameTimer;
   bool isSendingFrames = false;
-
   bool _isInitialized = false;
   int _recordedSeconds = 0;
   int _dangerLevel = 1;
   bool _isLoading = true;
 
   final ApiService _apiService = ApiService();
-
   int width = 0;
   int height = 0;
-  Uint8List? _nv21DataCache; // 缓存对象用于重用
+  Uint8List? _nv21DataCache;
+  late FlutterTts _flutterTts;
+  int _past = 1;
+  bool _isSpeaking = false;
+
+  final SupabaseClient user = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    _flutterTts = FlutterTts()..setLanguage("zh-TW");
+
+    _flutterTts.setStartHandler(() => setState(() => _isSpeaking = true));
+    _flutterTts.setCompletionHandler(() => setState(() => _isSpeaking = false));
+    _flutterTts.setErrorHandler((message) {
+      setState(() => _isSpeaking = false);
+      print("Error during TTS: $message");
+    });
   }
 
   Future<void> _initializeCamera() async {
@@ -50,10 +62,9 @@ class _CameraPageState extends State<CameraPage> {
     final firstCamera = cameras.firstWhere(
           (camera) => camera.lensDirection == CameraLensDirection.back,
     );
-
     _cameraController = CameraController(
       firstCamera,
-      ResolutionPreset.medium,
+      ResolutionPreset.low,
       enableAudio: false,
     );
 
@@ -63,16 +74,13 @@ class _CameraPageState extends State<CameraPage> {
         _isInitialized = true;
         _isLoading = false;
       });
-
       if (widget.isRecording) {
         _startImageStream();
         _startRecordingTimer();
       }
     } catch (e) {
       print('Error initializing camera: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
 
     final size = _cameraController.value.previewSize;
@@ -86,17 +94,42 @@ class _CameraPageState extends State<CameraPage> {
   void _startImageStream() async {
     if (!_cameraController.value.isStreamingImages) {
       try {
-        _apiService.initializeConnection((int dangerLevel) {
-          if (mounted) {
-            setState(() {
-              _dangerLevel = dangerLevel;
-            });
-          }
-        });
+          _apiService.initializeConnection((double distance) {
+            if (mounted) {
+              setState(() {
+                // _dangerLevel = calculateDangerLevel(
+                //   double.tryParse(widget.currentSpeed) ?? 0.0,
+                //   distance,
+                // );
+                //_dangerLevel = 3;
+                if (distance < 50)
+                {
+                  _dangerLevel = 4;
+                }
+                else if (distance < 100)
+                {
+                  _dangerLevel = 3;
+                }
+                else if (distance < 150)
+                {
+                  _dangerLevel = 2;
+                }
+                else
+                {
+                  _dangerLevel = 1;
+                }
+
+                if (_dangerLevel == 4 && _past != 4) {
+                  _speakWarning();
+                }
+                _past = _dangerLevel;
+              });
+            }
+          });
 
         await _cameraController.startImageStream((CameraImage image) {
           if (_frameTimer == null || !_frameTimer!.isActive) {
-            _frameTimer = Timer(Duration(milliseconds: 33), () {
+            _frameTimer = Timer(Duration(milliseconds: 50), () {
               if (widget.isRecording) {
                 _processAndSendFrame(image);
               }
@@ -104,19 +137,16 @@ class _CameraPageState extends State<CameraPage> {
           }
         });
       } catch (e) {
-        print("启动图像流时发生错误: $e");
+        print("Error starting image stream: $e");
       }
-    } else {
-      print("图像流已经在运行中");
     }
   }
 
-
-  void _processAndSendFrame(CameraImage image) {
+  Future<void> _processAndSendFrame(CameraImage image) async {
     if (image.format.group == ImageFormatGroup.yuv420) {
-      _convertYUV420ToNV21(image);
-      if (_nv21DataCache != null) {
-        String base64Frame = base64Encode(_nv21DataCache!);
+      final nv21Data = _convertYUV420ToNV21(image);
+      if (nv21Data != null) {
+        String base64Frame = base64Encode(nv21Data);
         _apiService.sendFrame(base64Frame, width, height);
       }
     } else {
@@ -124,20 +154,19 @@ class _CameraPageState extends State<CameraPage> {
     }
   }
 
-  void _convertYUV420ToNV21(CameraImage image) {
-    if (_nv21DataCache == null) return;
-
+  Uint8List? _convertYUV420ToNV21(CameraImage image) {
+    if (_nv21DataCache == null) return null;
     int ySize = width * height;
     int uvSize = (width ~/ 2) * (height ~/ 2);
-
-    // 重用已分配的内存，避免重复分配
-    _nv21DataCache!.setRange(0, ySize, image.planes[0].bytes);
-
     int index = ySize;
+
+    _nv21DataCache!.setRange(0, ySize, image.planes[0].bytes);
     for (int i = 0; i < uvSize; i++) {
-      _nv21DataCache![index++] = image.planes[2].bytes[i]; // V平面
-      _nv21DataCache![index++] = image.planes[1].bytes[i]; // U平面
+      _nv21DataCache![index++] = image.planes[2].bytes[i]; // V
+      _nv21DataCache![index++] = image.planes[1].bytes[i]; // U
     }
+
+    return _nv21DataCache;
   }
 
   void _startRecordingTimer() {
@@ -145,14 +174,44 @@ class _CameraPageState extends State<CameraPage> {
     _recordedSeconds = 0;
     _recordingTimer = Timer.periodic(Duration(seconds: 1), (Timer timer) {
       if (widget.isRecording) {
-        setState(() {
-          _recordedSeconds++;
-        });
+        setState(() => _recordedSeconds++);
       } else {
         timer.cancel();
       }
     });
   }
+
+  Future<void> _speakWarning() async {
+    if (!_isSpeaking) {
+      await _flutterTts.speak("請注意行車距離");
+    }
+  }
+
+  int calculateDangerLevel(double speed, double distance) {
+    const double reactionTime = 1.0;
+    const double brakingDeceleration = 0.65;
+    const double g = 9.8;
+    speed /= 3.6;
+
+    double reactionDistance = speed * reactionTime;
+    double brakingDistance = (speed * speed) / (2 * brakingDeceleration * g);
+    double safeDistance = reactionDistance + brakingDistance;
+
+    if (distance > safeDistance * 2) {
+      return 1;
+    } else if (distance > safeDistance * 1.5) {
+      return 2;
+    } else if (distance > safeDistance) {
+      return 3;
+    } else {
+      return 4;
+    }
+  }
+
+  Future<void> _notifyRecordingStatus(bool isRecording) async {
+    _apiService.sendRecordingStatus(isRecording);
+  }
+
 
   @override
   void didUpdateWidget(covariant CameraPage oldWidget) {
@@ -162,31 +221,29 @@ class _CameraPageState extends State<CameraPage> {
       if (widget.isRecording) {
         _startImageStream();
         _startRecordingTimer();
+        _notifyRecordingStatus(true);
       } else {
         _cameraController.stopImageStream();
         _recordingTimer?.cancel();
-        _apiService.closeConnection();
+        _notifyRecordingStatus(false);
       }
     }
   }
 
   @override
   void dispose() {
+    // 在销毁时确保连接关闭
     _cameraController.dispose();
     _recordingTimer?.cancel();
     _apiService.closeConnection();
     super.dispose();
   }
 
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Container(
-        color: Colors.white,
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return Center(child: CircularProgressIndicator());
     } else {
       Color? borderColor;
       String? warningText;
@@ -218,9 +275,9 @@ class _CameraPageState extends State<CameraPage> {
         children: [
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
-                border: borderColor != null ? Border.all(color: borderColor!, width: 5) : null,
-              ),
+              decoration: borderColor != null
+                  ? BoxDecoration(border: Border.all(color: borderColor, width: 5))
+                  : null,
               child: CameraPreview(_cameraController),
             ),
           ),
@@ -239,9 +296,7 @@ class _CameraPageState extends State<CameraPage> {
           Positioned(
             bottom: 25,
             child: GestureDetector(
-              onTap: () {
-                widget.toggleRecording();
-              },
+              onTap: () => widget.toggleRecording(),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -275,7 +330,6 @@ class _CameraPageState extends State<CameraPage> {
                 padding: EdgeInsets.all(8.0),
                 color: Colors.black54,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       '${widget.currentSpeed}',
