@@ -5,30 +5,29 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ApiService {
-  static const String _webSocketUrl = 'wss://6664-2402-7500-a43-845a-6809-9454-84a4-1d79.ngrok-free.app/ws'; // 更新为 FastAPI 的 WebSocket 端点
+  static const String _webSocketUrl = 'wss://3956-2001-b400-e739-6f68-cd22-baf7-4cbc-a69f.ngrok-free.app/ws';
 
 
   late SocketChannel _socketChannel;
 
   ApiService() {
-    // 初始化 WebSocket 连接
+    // 初始化 WebSocket
     _socketChannel = SocketChannel(() => IOWebSocketChannel.connect(_webSocketUrl));
   }
   void initializeConnection(Function(double) onDataReceived) async {
-    // 监听 WebSocket 数据流
+    // 監聽 WebSocket
     _socketChannel.stream.listen(
           (event) {
         print('Received event: $event');
         try {
-          // 假设服务器返回的数据是一个包含状态的 JSON 格式字符串
           var jsonResponse = jsonDecode(event);
 
           if (jsonResponse.containsKey('distance')) {
-            // 处理 'danger' 字段并将其转换为整数
+            // 處理 'danger'
             double distance = double.parse(jsonResponse['distance'].toString());
             print('Received danger level: $distance');
             onDataReceived(distance);
-            // 你可以在这里调用一个函数来使用 dangerLevel 值
+
           } else if (jsonResponse.containsKey('status')) {
             // Assuming the server sends status codes
             String statusCode = jsonResponse['status'].toString();
@@ -69,11 +68,12 @@ class ApiService {
     }
   }
 
-  void sendRecordingStatus(bool isRecording) {
+  void sendRecordingStatus(bool isRecording, String userId) {
     try {
       Map<String, dynamic> message = {
         "type": "recording_status",
         "isRecording": isRecording,
+        "userid": userId,
       };
 
       _socketChannel.sendMessage(jsonEncode(message));

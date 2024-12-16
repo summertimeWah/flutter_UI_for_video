@@ -41,7 +41,7 @@ class _CameraPageState extends State<CameraPage> {
   int _past = 1;
   bool _isSpeaking = false;
 
-  final SupabaseClient user = Supabase.instance.client;
+  var userId = Supabase.instance.client.auth.currentSession?.user.id;
 
   @override
   void initState() {
@@ -97,27 +97,10 @@ class _CameraPageState extends State<CameraPage> {
           _apiService.initializeConnection((double distance) {
             if (mounted) {
               setState(() {
-                // _dangerLevel = calculateDangerLevel(
-                //   double.tryParse(widget.currentSpeed) ?? 0.0,
-                //   distance,
-                // );
-                //_dangerLevel = 3;
-                if (distance < 50)
-                {
-                  _dangerLevel = 4;
-                }
-                else if (distance < 100)
-                {
-                  _dangerLevel = 3;
-                }
-                else if (distance < 150)
-                {
-                  _dangerLevel = 2;
-                }
-                else
-                {
-                  _dangerLevel = 1;
-                }
+                _dangerLevel = calculateDangerLevel(
+                  double.tryParse(widget.currentSpeed) ?? 0.0,
+                  distance,
+                );
 
                 if (_dangerLevel == 4 && _past != 4) {
                   _speakWarning();
@@ -129,7 +112,12 @@ class _CameraPageState extends State<CameraPage> {
 
         await _cameraController.startImageStream((CameraImage image) {
           if (_frameTimer == null || !_frameTimer!.isActive) {
-            _frameTimer = Timer(Duration(milliseconds: 50), () {
+            // _frameTimer = Timer(Duration(milliseconds: 50), () {
+            //   if (widget.isRecording) {
+            //     _processAndSendFrame(image);
+            //   }
+            // });
+            _frameTimer = Timer(Duration(milliseconds: 500), () {
               if (widget.isRecording) {
                 _processAndSendFrame(image);
               }
@@ -188,7 +176,7 @@ class _CameraPageState extends State<CameraPage> {
   }
 
   int calculateDangerLevel(double speed, double distance) {
-    const double reactionTime = 1.0;
+    const double reactionTime = 2.5;
     const double brakingDeceleration = 0.65;
     const double g = 9.8;
     speed /= 3.6;
@@ -197,7 +185,7 @@ class _CameraPageState extends State<CameraPage> {
     double brakingDistance = (speed * speed) / (2 * brakingDeceleration * g);
     double safeDistance = reactionDistance + brakingDistance;
 
-    if (distance > safeDistance * 2) {
+    /*if (distance > safeDistance * 2) {
       return 1;
     } else if (distance > safeDistance * 1.5) {
       return 2;
@@ -205,11 +193,22 @@ class _CameraPageState extends State<CameraPage> {
       return 3;
     } else {
       return 4;
+    }*/
+    if (distance > 50) {
+      return 1;
+    } else if (distance > 44) {
+      return 2;
+    } else if (distance > 28) {
+      return 3;
+    } else {
+      return 4;
     }
   }
 
-  Future<void> _notifyRecordingStatus(bool isRecording) async {
-    _apiService.sendRecordingStatus(isRecording);
+  Future<void> _notifyRecordingStatus(bool isRecording, String userId) async {
+    _apiService.sendRecordingStatus(isRecording, userId);
+    print('this is uid');
+    print(userId);
   }
 
 
@@ -221,18 +220,17 @@ class _CameraPageState extends State<CameraPage> {
       if (widget.isRecording) {
         _startImageStream();
         _startRecordingTimer();
-        _notifyRecordingStatus(true);
+        _notifyRecordingStatus(true, userId!);
       } else {
         _cameraController.stopImageStream();
         _recordingTimer?.cancel();
-        _notifyRecordingStatus(false);
+        _notifyRecordingStatus(false, '');
       }
     }
   }
 
   @override
   void dispose() {
-    // 在销毁时确保连接关闭
     _cameraController.dispose();
     _recordingTimer?.cancel();
     _apiService.closeConnection();

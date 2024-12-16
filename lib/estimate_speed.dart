@@ -78,7 +78,7 @@ class SpeedPageState extends State<SpeedPage> {
         setState(() {
           locationDisabled = true;
         });
-        _showPermissionDeniedDialog(); // 提示用户权限被拒绝
+        _showPermissionDeniedDialog();
         return;
       }
     }

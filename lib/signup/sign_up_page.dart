@@ -127,7 +127,6 @@ class _SignUpPageState extends State<SignUpPage> {
       final response = await _supabase.auth.signUp(email: email, password: password);
 
       if (response.user != null) {
-        // 註冊成功，導航至主頁面
         Navigator.pushNamed(context, "/home");
       } else {
         setState(() {

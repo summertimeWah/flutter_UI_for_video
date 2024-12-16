@@ -62,7 +62,7 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey<SpeedPageState> _speedPageKey = GlobalKey<SpeedPageState>();
   SpeedUnit speedUnit = SpeedUnit.KPH;
 
-  var currentUser = Supabase.instance.client.auth.currentSession?.user;  // 用 Supabase 來處理用戶信息
+  var currentUser = Supabase.instance.client.auth.currentSession?.user;
   bool isGranted = false;
 
   @override
@@ -88,7 +88,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       );
-      return; // 終止函數，避免繼續執行錄製邏輯
+      return;
     }
 
     _checkAndRequestLocationPermission();
@@ -174,7 +174,7 @@ class _HomePageState extends State<HomePage> {
 
   void updateSpeed(double speed) {
     setState(() {
-      currentSpeed = speedUnit.format(speed); // 使用 SpeedUnit 格式化速度
+      currentSpeed = speedUnit.format(speed);
     });
   }
 
@@ -190,7 +190,6 @@ class _HomePageState extends State<HomePage> {
                 IconButton(
                   icon: Icon(Icons.menu),
                   onPressed: () {
-                    // 使用 Builder 包裹以确保有一个 Scaffold 上下文
                     Scaffold.of(context).openEndDrawer();
                   },
                 ),
@@ -228,7 +227,7 @@ class _HomePageState extends State<HomePage> {
                   title: Text("log out"),
                   trailing: Icon(Icons.logout),
                   onTap: () async {
-                    await Supabase.instance.client.auth.signOut(); // 不需要檢查回應物件，signOut 會直接執行
+                    await Supabase.instance.client.auth.signOut();
                     setState(() {
                       currentUser = Supabase.instance.client.auth.currentSession?.user;  // 更新 currentUser 為 null
                     });
